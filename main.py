@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import engine, Operation
-from settings import TELEGRAM_TOKEN
+from settings import TELEGRAM_TOKEN, OWNER_ID
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
@@ -15,7 +15,15 @@ bot.set_my_commands([
 ])
 
 
+def owner_check(func):
+    def wrapper(*args, **kwargs):
+        if args[0].from_user.id == OWNER_ID:
+            func(*args, **kwargs)
+    return wrapper
+
+
 @bot.message_handler(commands=["balance"])
+@owner_check
 def handle(message: telebot.types.Message) -> None:
     with Session(engine) as session:
         value = session.query(func.sum(Operation.value)).scalar()
@@ -23,6 +31,7 @@ def handle(message: telebot.types.Message) -> None:
 
 
 @bot.message_handler(commands=["list"])
+@owner_check
 def handle(message: telebot.types.Message) -> None:
     with Session(engine) as session:
         query = session.query(Operation).order_by(Operation.date.desc())
@@ -36,6 +45,7 @@ def handle(message: telebot.types.Message) -> None:
 
 
 @bot.message_handler(func=lambda m: True)
+@owner_check
 def handle(message: telebot.types.Message) -> None:
     write(*message.text.split())
 

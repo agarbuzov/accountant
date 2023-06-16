@@ -8,6 +8,7 @@ DATABASE = {
 }
 
 TELEGRAM_TOKEN = None
+OWNER_ID = None
 
 from local_settings import *
 
