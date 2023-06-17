@@ -3,6 +3,7 @@ from datetime import datetime
 import telebot
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from telebot.formatting import escape_markdown
 
 from models import engine, Operation
 from settings import TELEGRAM_TOKEN, OWNER_ID
@@ -40,19 +41,19 @@ def handle(message: telebot.types.Message) -> None:
             query.limit(int(args[0]))
 
     bot.reply_to(message, "\n".join([
-        f"{operation.date} {operation.description} *{operation.value:+}*" for operation in query.all()
+        f"{operation.date} {escape_markdown(operation.description)} *{operation.value:+}*" for operation in query.all()
     ]), parse_mode="Markdown")
 
 
 @bot.message_handler(func=lambda m: True)
 @owner_check
 def handle(message: telebot.types.Message) -> None:
-    write(*message.text.split())
+    write(*message.text.split(","))
 
 
 def write(value, description, date=None) -> None:
     with Session(engine) as session:
-        operation = Operation(value=value, description=description)
+        operation = Operation(value=value, description=description.strip())
         session.add(operation)
 
         if date:
