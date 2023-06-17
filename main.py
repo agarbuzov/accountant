@@ -35,13 +35,17 @@ def handle(message: telebot.types.Message) -> None:
 @owner_check
 def handle(message: telebot.types.Message) -> None:
     with Session(engine) as session:
-        query = session.query(Operation).order_by(Operation.date.desc())
+        query = session.query(Operation).order_by(Operation.id.desc())
 
         if args := message.text.split()[1:]:
-            query.limit(int(args[0]))
+            query = query.limit(int(args[0]))
+        else:
+            query = query.limit(10)
+
+    result = session.query(query.subquery()).order_by("id").all()
 
     bot.reply_to(message, "\n".join([
-        f"{operation.date} {escape_markdown(operation.description)} *{operation.value:+}*" for operation in query.all()
+        f"{operation.date} | {escape_markdown(operation.description)} | *{operation.value:+}*" for operation in result
     ]), parse_mode="Markdown")
 
 
