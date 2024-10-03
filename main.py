@@ -12,7 +12,8 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 bot.set_my_commands([
     telebot.types.BotCommand("/balance", "Current balance"),
-    telebot.types.BotCommand("/list", "List of specified number of recent operations, default 10")
+    telebot.types.BotCommand("/list", "List of specified number of recent operations, default 10"),
+    telebot.types.BotCommand("/delete", "Delete operation")
 ])
 
 
@@ -35,34 +36,63 @@ def handle(message: telebot.types.Message) -> None:
 @owner_check
 def handle(message: telebot.types.Message) -> None:
     with Session(engine) as session:
-        query = session.query(Operation).order_by(Operation.id.desc())
+        query = session.query(Operation).order_by(Operation.date.desc())
 
         if args := message.text.split()[1:]:
             query = query.limit(int(args[0]))
         else:
             query = query.limit(10)
 
-    result = session.query(query.subquery()).order_by("id").all()
+    result = session.query(query.subquery()).order_by("date").all()
 
     bot.reply_to(message, "\n".join([
         f"{operation.date} | {escape_markdown(operation.description)} | *{operation.value:+}*" for operation in result
     ]), parse_mode="Markdown")
 
 
+@bot.message_handler(commands=["delete"])
+@owner_check
+def handle(message: telebot.types.Message) -> None:
+    with Session(engine) as session:
+        if operation := session.get(Operation, message.reply_to_message.id):
+            session.delete(operation)
+            session.commit()
+
+    bot.delete_message(message.chat.id, message.id)
+    bot.delete_message(message.chat.id, message.reply_to_message.id)
+
+
 @bot.message_handler(func=lambda m: True)
 @owner_check
 def handle(message: telebot.types.Message) -> None:
-    write(*message.text.split(","))
+    write(message.id, *message.text.split(","))
 
 
-def write(value, description, date=None) -> None:
+@bot.edited_message_handler(func=lambda m: True)
+@owner_check
+def handle(message: telebot.types.Message) -> None:
+    update(message.id, *message.text.split(","))
+
+
+def write(message_id, value, description, date=None) -> None:
     with Session(engine) as session:
-        operation = Operation(value=value, description=description.strip())
+        operation = Operation(id=message_id, value=value.strip(), description=description.strip())
         session.add(operation)
 
         if date:
-            operation.date = datetime.strptime(date, "%Y-%m-%d")
+            operation.date = datetime.strptime(date.strip(), "%Y-%m-%d")
 
+        session.commit()
+
+
+def update(message_id, value, description, date=None) -> None:
+    with Session(engine) as session:
+        data = {"value": value.strip(), "description": description.strip()}
+
+        if date:
+            data["date"] = datetime.strptime(date.strip(), "%Y-%m-%d")
+
+        session.query(Operation).filter_by(id=message_id).update(data)
         session.commit()
 
 
